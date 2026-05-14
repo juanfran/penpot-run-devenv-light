@@ -6,12 +6,12 @@ Penpot's default `./manage.sh run-devenv` spins up **four JVMs** inside the
 devenv container (`frontend watch`, `frontend storybook`, `exporter`, `backend`)
 plus the Storybook Vite dev server and a handful of auxiliary services
 (MinIO, Postgres, Valkey/Redis, Mailcatcher, LDAP). On most machines this
-quickly pushes Java alone past 6 GB of RAM — overkill if you're only
+quickly pushes Java RAM usage very high — overkill if you're only
 iterating on part of the stack.
 
 This script lets you pick which services to start, caps each JVM's heap to
 sensible dev defaults, and stops auxiliary containers you probably don't
-need. Typical savings: from 6+ GB down to 2–3 GB for frontend + backend work.
+need. It can help you save several GB of memory for frontend + backend work.
 
 No changes to the Penpot source tree are required. Everything lives in this
 external folder.
