@@ -158,7 +158,7 @@ clojure -M:dev:shadow-cljs watch main worker
 skipping the Storybook compile entirely. Use it when you don't open
 Storybook locally.
 
-## Build caches (why startup is fast)
+## Build caches
 
 Penpot's own `./scripts/watch app` always runs these three steps before
 starting the watcher:
