@@ -4,8 +4,12 @@
 
 set -e
 
-DEVENV_PNAME="penpotdev"
-COMPOSE_REL="docker/devenv/docker-compose.yaml"
+DEFAULTS_ENV_REL="docker/devenv/defaults.env"
+INFRA_COMPOSE_REL="docker/devenv/docker-compose.infra.yml"
+MAIN_COMPOSE_REL="docker/devenv/docker-compose.main.yml"
+INFRA_PNAME="penpotdev-infra"
+INSTANCE="ws0"
+INSTANCE_PNAME="penpotdev-${INSTANCE}"
 
 PENPOT_REPO="${PENPOT_REPO:-$HOME/projects/penpot}"
 
@@ -39,14 +43,44 @@ if [[ ! -d "$PENPOT_REPO" ]]; then
   echo "Set PENPOT_REPO or pass --repo PATH." >&2
   exit 1
 fi
-if [[ ! -f "$PENPOT_REPO/$COMPOSE_REL" ]]; then
-  echo "Path does not look like a Penpot repo: $PENPOT_REPO" >&2
-  echo "Expected $COMPOSE_REL." >&2
-  exit 1
-fi
+for f in "$DEFAULTS_ENV_REL" "$INFRA_COMPOSE_REL" "$MAIN_COMPOSE_REL"; do
+  if [[ ! -f "$PENPOT_REPO/$f" ]]; then
+    echo "Path does not look like a current Penpot repo: $PENPOT_REPO" >&2
+    echo "Missing expected file: $f" >&2
+    exit 1
+  fi
+done
 PENPOT_REPO="$(cd "$PENPOT_REPO" && pwd)"
 
 cd "$PENPOT_REPO"
-echo ">> stopping devenv compose ($DEVENV_PNAME)..."
-docker compose -p "$DEVENV_PNAME" -f "$COMPOSE_REL" stop -t 2
+
+# Same shell overrides as the launcher so compose can identify the
+# instance's project/containers correctly.
+echo ">> stopping main container ($INSTANCE_PNAME)..."
+env -i HOME="$HOME" PATH="$PATH" PWD="$PWD" \
+  CURRENT_USER_ID="$(id -u)" \
+  PENPOT_SOURCE_PATH="$PENPOT_REPO" \
+  PENPOT_MAIN_CONTAINER_NAME="penpot-devenv-${INSTANCE}-main" \
+  PENPOT_USER_DATA_VOLUME="penpotdev_${INSTANCE}_user_data" \
+  PENPOT_PUBLIC_URI="https://localhost:3449" \
+  PENPOT_REDIS_URI="redis://valkey/0" \
+  PENPOT_PUBLIC_HTTPS_PORT=3449 \
+  PENPOT_PUBLIC_HTTP_PORT=3450 \
+  PENPOT_MCP_SERVER_PORT=4401 \
+  PENPOT_MCP_REPL_PORT=4403 \
+  SERENA_EXTERNAL_PORT=14181 \
+  SERENA_DASHBOARD_EXTERNAL_PORT=14182 \
+  SHADOW_SERVER_URL="wss://localhost:3449" \
+  PENPOT_TENANT="devenv-${INSTANCE}" \
+  PENPOT_TMUX_ATTACH=false \
+  docker compose -p "$INSTANCE_PNAME" \
+    --env-file "$DEFAULTS_ENV_REL" \
+    -f "$MAIN_COMPOSE_REL" stop -t 2
+
+echo ">> stopping shared infra ($INFRA_PNAME)..."
+env -i HOME="$HOME" PATH="$PATH" PWD="$PWD" \
+  docker compose -p "$INFRA_PNAME" \
+    --env-file "$DEFAULTS_ENV_REL" \
+    -f "$INFRA_COMPOSE_REL" stop -t 2
+
 echo ">> done."

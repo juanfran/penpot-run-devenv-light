@@ -62,6 +62,9 @@ Options:
       --aux LIST         Comma-separated list of auxiliary containers to
                          keep running. Available: mailer, ldap.
                          Default: none — both are stopped to save RAM.
+      --recreate         Force-remove the ws0 main container before starting
+                         so it is recreated fresh on the current network.
+                         Data volumes are preserved. See "Starting fresh".
   -h, --help             Show this help.
 ```
 
@@ -120,12 +123,12 @@ PENPOT_REPO=~/code/penpot ./run-devenv-light.sh
 | `exporter`  | `./scripts/watch` + `wait-and-start.sh` (PDF/PNG export service)   |
 | `mcp`       | `./scripts/start-mcp-devenv` (MCP server, also enables the plugin) |
 
-Each service runs in its own tmux window inside the `penpot-devenv-main`
+Each service runs in its own tmux window inside the `penpot-devenv-ws0-main`
 container, on the `penpot` session — the same convention Penpot's own
 `run-devenv` uses, so you can detach with `Ctrl-b d` and re-attach with:
 
 ```bash
-cd $PENPOT_REPO && ./manage.sh run-devenv-shell tmux attach -t penpot
+cd $PENPOT_REPO && ./manage.sh attach-devenv
 ```
 
 ## How it caps memory
@@ -207,9 +210,42 @@ PENPOT_REPO=~/code/penpot ./stop-devenv-light.sh
 ./stop-devenv-light.sh -p ~/code/penpot
 ```
 
-It runs `docker compose stop -t 2` against the `penpotdev` compose project,
-i.e. the exact equivalent of `./manage.sh stop-devenv`. Volumes and data
-are preserved; next run starts from where you left off.
+It runs `docker compose stop -t 2` against the `penpotdev-ws0` (main
+container) and `penpotdev-infra` (shared services) compose projects, i.e.
+the exact equivalent of `./manage.sh stop-devenv`. Volumes and data are
+preserved; next run starts from where you left off.
+
+## Starting fresh (`--recreate`)
+
+Sometimes the ws0 main container gets into a broken state and won't come up:
+it shows as `Exited (1)` and `docker logs penpot-devenv-ws0-main` ends with
+
+```
+[emerg] host not found in upstream "raw.githubusercontent.com" in /etc/nginx/nginx.conf
+```
+
+This happens when the container is left attached to a **stale/missing Docker
+network** — typically after a `./manage.sh drop-devenv`, a Docker daemon
+restart, or another compose stack churning the network. `docker compose up`
+reuses the existing container **by name**, so it keeps re-launching the same
+networkless zombie, whose nginx dies on its first DNS lookup. A plain restart
+never fixes it.
+
+The escape hatch is to remove the container so it's recreated from scratch on
+the live network:
+
+```bash
+./run-devenv-light.sh --recreate --aux mailer --minimal-frontend
+```
+
+`--recreate` runs `docker rm -f penpot-devenv-ws0-main` before bringing the
+stack up. **Data volumes (`penpotdev_ws0_user_data`, Postgres, MinIO) are
+preserved** — only the container is rebuilt, so you don't lose any work.
+
+If even `--recreate` doesn't help, the Docker daemon's embedded DNS itself is
+flaky (often caused by another container stuck in a `Restarting` crash-loop
+churning the network). Check with `docker ps` for anything in `Restarting`,
+stop it, then as a last resort `sudo systemctl restart docker` and run again.
 
 ## Auxiliary containers
 
@@ -236,9 +272,17 @@ them.
 - **`Path does not look like a Penpot repo`** — the path doesn't contain
   `manage.sh` and `docker/devenv/docker-compose.yaml`. Double-check it points
   at a Penpot clone, not its parent.
-- **Container not running** — the script calls `./manage.sh start-devenv`
-  for you on first run; if you've never pulled the devenv image, run
-  `./manage.sh pull-devenv` from the Penpot repo first.
+- **Container not running** — the script brings up the shared infra and
+  ws0 main container itself on first run; if you've never pulled the devenv
+  image, run `./manage.sh pull-devenv` from the Penpot repo first.
+- **Container `Exited (1)` / logs show `host not found in upstream
+  "raw.githubusercontent.com"`** — the main container is stuck on a stale
+  network (usually after `drop-devenv` or a Docker restart). Re-run with
+  `--recreate`. See "Starting fresh".
+- **`port is already allocated`** — another stack is holding one of Penpot's
+  host ports (3449/3450/3451, 4401/4403, 14179–14182). Find it with
+  `docker ps --format '{{.Names}}\t{{.Ports}}' | grep 3451` and stop that
+  stack before launching.
 - **Backend OOM** — bump the heap, e.g. `JAVA_OPTS="-Xmx1500m -Xms50m"`.
 - **Detach/re-attach** — `Ctrl-b d` to detach; re-attach with
-  `./manage.sh run-devenv-shell tmux attach -t penpot`.
+  `./manage.sh attach-devenv` (from the Penpot repo).
