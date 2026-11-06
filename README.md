@@ -26,7 +26,7 @@ external folder.
 
 ```bash
 git clone <this-folder> ~/projects/run-penpot-light
-chmod +x ~/projects/run-penpot-light/run-devenv-light.sh ~/projects/run-penpot-light/stop-devenv-light.sh
+chmod +x ~/projects/run-penpot-light/run-devenv-light.sh ~/projects/run-penpot-light/attach-devenv-light.sh ~/projects/run-penpot-light/stop-devenv-light.sh
 ```
 
 ## Configuration
@@ -57,7 +57,7 @@ Options:
       --clean            Wipe shadow-cljs + wasm caches and rebuild wasm
                          from scratch. SLOW — the wasm rebuild takes
                          several minutes. Default: off (reuse existing
-                         caches; only build wasm if its artifact is
+                         caches; only build wasm if an artifact is
                          missing).
       --aux LIST         Comma-separated list of auxiliary containers to
                          keep running. Available: mailer, ldap.
@@ -128,7 +128,7 @@ container, on the `penpot` session — the same convention Penpot's own
 `run-devenv` uses, so you can detach with `Ctrl-b d` and re-attach with:
 
 ```bash
-cd $PENPOT_REPO && ./manage.sh attach-devenv
+./attach-devenv-light.sh
 ```
 
 ## How it caps memory
@@ -177,8 +177,9 @@ starting the watcher:
 That's fine for a one-shot daily devenv, but painful if you start/stop
 the stack often. By default this launcher **skips all three** and reuses
 the existing caches. The only exception is `build:wasm`, which is run
-automatically the very first time (when
-`frontend/resources/public/js/render-wasm.wasm` doesn't exist yet).
+automatically when either of its outputs is missing:
+`frontend/resources/public/js/render-wasm.wasm` or
+`frontend/src/app/render_wasm/api/shared.js`.
 
 If you actually need a clean rebuild — typically after:
 
@@ -285,4 +286,4 @@ them.
   stack before launching.
 - **Backend OOM** — bump the heap, e.g. `JAVA_OPTS="-Xmx1500m -Xms50m"`.
 - **Detach/re-attach** — `Ctrl-b d` to detach; re-attach with
-  `./manage.sh attach-devenv` (from the Penpot repo).
+  `./attach-devenv-light.sh`.

@@ -50,7 +50,7 @@ Options:
       --clean            Wipe shadow-cljs + wasm caches and rebuild wasm from
                          scratch before starting the watcher. SLOW (the wasm
                          rebuild takes minutes). By default the watcher reuses
-                         existing caches and only builds wasm if the artifact
+                         existing caches and only builds wasm if an artifact
                          is missing.
       --aux LIST         Comma-separated list of auxiliary containers to keep
                          running. Available: mailer, ldap.
@@ -334,8 +334,9 @@ MID
       # Match ./scripts/watch app exactly: nuke caches, rebuild wasm.
       prefix='pnpm run clear:shadow-cache && pnpm run clear:wasm && pnpm run build:wasm'
     else
-      # Keep shadow-cljs cache; only build wasm if the artifact is missing.
-      prefix='{ [ -f resources/public/js/render-wasm.wasm ] || pnpm run build:wasm; }'
+      # Keep shadow-cljs cache; only build wasm if an artifact is missing.
+      # shared.js is also build output, and the cljs build requires it.
+      prefix='{ { [ -f resources/public/js/render-wasm.wasm ] && [ -f src/app/render_wasm/api/shared.js ]; } || pnpm run build:wasm; }'
     fi
     echo "add_window 'frontend' 'cd ~/penpot/frontend && ${prefix} && pnpm exec concurrently --kill-others-on-fail \"pnpm run watch:app:assets\" \"${shadow_cmd}\" \"pnpm run watch:app:libs\"'"
   fi
